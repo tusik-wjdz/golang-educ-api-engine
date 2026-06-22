@@ -1,0 +1,16 @@
+{
+    "general": {
+        "api_hostname"  : "",    
+        "api_port"      : "8080",
+        "api_log_pfx"   : "api_main_",
+        "session_time"  : "3600",
+        "token_len"     : "32"
+    },
+    "db": {
+        "db_user"       : "johndoe",
+        "db_pass"       : "my_secret_pass",
+        "db_host"       : "localhost",
+        "db_port"       : "5432",
+        "db_name"       : "mydb_name"
+    }
+}

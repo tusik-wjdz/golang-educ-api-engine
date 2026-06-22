@@ -1,0 +1,864 @@
+[
+  {
+    "name": "login",
+    "path": "/users/login",
+    "method": "POST",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "Login",
+    "params": [
+      {
+        "name": "email",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "phrase",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "logout",
+    "path": "/users/logout",
+    "method": "GET",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "Logout",
+    "params": []
+  },
+  {
+    "name": "register",
+    "path": "/users/register",
+    "method": "POST",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "RegisterUser",
+    "params": [
+      {
+        "name": "first_name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "last_name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "email",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "phrase",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "nickname",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "updateUser",
+    "path": "/users/update",
+    "method": "PUT",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "UpdateUser",
+    "params": [
+      {
+        "name": "uid",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": true,
+        "default": "0"
+      },
+      {
+        "name": "first_name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "last_name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "nickname",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "email",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "phrase",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "deleteUser",
+    "path": "/users/delete",
+    "method": "DELETE",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED",
+      "USER_ROLE_ADMIN"
+    ],
+    "handler": "DeleteUser",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "listUser",
+    "path": "/users/list",
+    "method": "GET",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED",
+      "USER_ROLE_ADMIN"
+    ],
+    "handler": "ListUsers",
+    "params": [
+      {
+        "name": "limit",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "offset",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      }
+    ]
+  },
+  {
+    "name": "findWeatherStation",
+    "path": "/ws/find",
+    "method": "GET",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "FindWeatherStation",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "createWeatherStation",
+    "path": "/ws/create",
+    "method": "POST",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "CreateWeatherStation",
+    "params": [
+      {
+        "name": "city",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "temperature",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "humidity",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "wind",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "wind_gust",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "sig_weather",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": "NO DATA"
+      },
+      {
+        "name": "precipitation",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "pressure",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "low_clouds_coverage",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "mid_clouds_coverage",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "high_clouds_coverage",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "updateWeatherStation",
+    "path": "/ws/update",
+    "method": "PUT",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "UpdateWeatherStation",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "temperature",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "humidity",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "wind",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "wind_gust",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "sig_weather",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": "NO DATA"
+      },
+      {
+        "name": "precipitation",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "pressure",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "low_clouds_coverage",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "mid_clouds_coverage",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "high_clouds_coverage",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "listWeatherStation",
+    "path": "/ws/list",
+    "method": "GET",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "ListWeatherStations",
+    "params": [
+      {
+        "name": "limit",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "offset",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "by",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": true,
+        "default": "id"
+      },
+      {
+        "name": "dir",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": true,
+        "default": "asc"
+      }
+    ]
+  },
+  {
+    "name": "deleteWeatherStation",
+    "path": "/ws/delete",
+    "method": "DELETE",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "DeleteWeatherStation",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "createProduct",
+    "path": "/products/create",
+    "method": "POST",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "CreateProduct",
+    "params": [
+      {
+        "name": "name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "price",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "qty",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "description",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "color",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "updateProduct",
+    "path": "/products/update",
+    "method": "PUT",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "UpdateProduct",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": ""
+      },      
+      {
+        "name": "name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "price",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "qty",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "description",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "color",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "listProduct",
+    "path": "/products/list",
+    "method": "GET",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "ListProducts",
+    "params": [
+      {
+        "name": "limit",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "offset",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "by",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": true,
+        "default": "id"
+      },
+      {
+        "name": "dir",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": true,
+        "default": "asc"
+      }
+    ]
+  },
+  {
+    "name": "listProductUserCtx",
+    "path": "/products/list-my",
+    "method": "GET",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "ListProductsInUserCtx",
+    "params": [
+      {
+        "name": "limit",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "offset",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      }
+    ]
+  },
+  {
+    "name": "deleteProduct",
+    "path": "/products/delete",
+    "method": "DELETE",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "DeleteProduct",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "hello",
+    "path": "/hello",
+    "method": "GET",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "HelloAction",
+    "params": [
+      {
+        "name": "who",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "some-option",
+        "type": "PARAM_TYPE_BOOL",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": "false"
+      },
+      {
+        "name": "age",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": "18"
+      }
+    ]
+  },
+  {
+    "name": "index",
+    "path": "/index",
+    "method": "POST",
+    "restricted": false,
+    "required_roles": [],
+    "handler": "IndexAction",
+    "params": [
+      {
+        "name": "first-name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "last-name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "age",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": "88"
+      }
+    ]
+  },
+  {
+    "name": "member-zone",
+    "path": "/member-zone",
+    "method": "POST",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "MemberZoneAction",
+    "params": [
+      {
+        "name": "firstname",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "lastname",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "email",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "feels_happy",
+        "type": "PARAM_TYPE_BOOL",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "age",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      },
+      {
+        "name": "gender",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": ""
+      }
+    ]
+  },
+  {
+    "name": "admin",
+    "path": "/admin",
+    "method": "POST",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED",
+      "USER_ROLE_ADMIN"
+    ],
+    "handler": "AdminAction",
+    "params": [
+      {
+        "name": "name",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": "superadmin"
+      }
+    ]
+  },
+  {
+    "name": "edit",
+    "path": "/edit",
+    "method": "PUT",
+    "restricted": true,
+    "required_roles": [
+      "USER_ROLE_TRUSTED"
+    ],
+    "handler": "EditHandler",
+    "params": [
+      {
+        "name": "id",
+        "type": "PARAM_TYPE_NUMBER",
+        "is_required": true,
+        "url_only": true,
+        "can_be_empty": false,
+        "default": "0"
+      },
+      {
+        "name": "email",
+        "type": "PARAM_TYPE_STRING",
+        "is_required": true,
+        "url_only": false,
+        "can_be_empty": false,
+        "default": ""
+      },
+      {
+        "name": "isValid",
+        "type": "PARAM_TYPE_BOOL",
+        "is_required": false,
+        "url_only": false,
+        "can_be_empty": true,
+        "default": "false"
+      }
+    ]
+  }
+]
