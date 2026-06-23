@@ -32,23 +32,19 @@ func GetProductService() *ProductService {
         ExternalImportMode:     false,
     }
 }
-
 // toggle `bulk` mode
 func (ps *ProductService) SetBulkMode(m bool) {
     ps.BulkMode = m
 }
-
 // toggle `external` import mode (allows system user to operate on specified user's / all products
 // "out of" the current session
 func (ps *ProductService) SetExternalImportMode(m bool) {
     ps.ExternalImportMode = m
 }
-
 // find by id
 func (ps *ProductService) Find(ctx context.Context, id int) (*Product, bool) {
     return ps.Products.Find(ctx, id)
 }
-
 // find by id but owned by specified user
 func (ps *ProductService) FindProductByOwner(
     ctx context.Context,
@@ -67,7 +63,6 @@ func (ps *ProductService) FindProductByOwner(
     p := prods[len(prods)-1]
     return p, true
 }
-
 // list products
 func (ps *ProductService) List(
     ctx context.Context,
@@ -88,7 +83,6 @@ func (ps *ProductService) List(
     }
     return prods, nil
 }
-
 // list products of specified user
 func (ps *ProductService) ListByOwner(
     ctx context.Context,
@@ -107,7 +101,6 @@ func (ps *ProductService) ListByOwner(
     }
     return prods, nil
 }
-
 // create
 func (ps *ProductService) Create(
     ctx context.Context,
@@ -136,8 +129,8 @@ func (ps *ProductService) Create(
     priceInt, err := ps.pConvertToCents(priceStr)
     if err != nil {        
         return &Product{}, ErrorFactory(ERR_CONV_TOCENTS, err)
-    }
-    // create new product in memory    
+    }    
+    // create new product in memory
     p := Product{
         Name:           name,
         Price:          priceInt,
@@ -148,12 +141,20 @@ func (ps *ProductService) Create(
         UpdatedAt:      &cTime,
         CreatedBy:      uID,
         UpdatedBy:      &uID,
+    }    
+    if !ps.BulkMode {
+        // generate fingerprint (product's checksum) - only in `standard-save` mode
+        if _, err := ps.GenerateProductFingerprint(&p); err != nil {
+            // log and return
+            log.Println(err)
+            return &p, ErrorFactory(ERR_GENERATE_FINGERPRINT)
+        }
     }
-
     ps.Products.Persist(&p)
     if ps.BulkMode { // for bulk mode
         return &p, nil
     }
+    // save
     if err := ps.Products.Flush(ctx); err != nil { // for traditional way
         return &Product{}, ErrorFactory(ERR_ENTITY_SAVE, "Product")
     }
@@ -214,7 +215,14 @@ func (ps *ProductService) Update(
     // check
     if isModified {
         p.UpdatedAt = &uTime
-        p.UpdatedBy = &uID
+        p.UpdatedBy = &uID        
+        if !ps.BulkMode {
+            // re-generate fingerprint (product's checksum) in `standard` save mode           
+            if _, err := ps.GenerateProductFingerprint(p); err != nil {
+                // just log and continue
+                log.Println(err)
+            }
+        }
         ps.Products.Persist(p)
         // for bulk mode... just return
         if ps.BulkMode {            
@@ -265,7 +273,7 @@ func (ps *ProductService) RemoveById(ctx context.Context, id int) error {
 // If you read it in the future (btw. heavy storm outside... )
 // keep in mind that you have to add to unique internal_id or something like that to the structure
 func (ps *ProductService) DumpIntoDb(ctx context.Context) error {
-    // TODO: chunk
+    // todo: chunk
     if ! ps.BulkMode {
         // not in bulk mode, so nothing to do
         return nil
@@ -278,7 +286,6 @@ func (ps *ProductService) DumpIntoDb(ctx context.Context) error {
     // looks fine
     return nil
 }
-
 // Updates products fingerprints (spec. checksums) async.
 // packetSize means records preparing for "one shot" to DB
 // offset is just a start point...
@@ -292,6 +299,7 @@ func (ps *ProductService) UpdateProductsFingerprints(
     packetSize int,
     offset int,
     maxRecords int,
+    updateAll bool,
 ) error {
     // todo: custom errors
     counter         := 0
@@ -299,17 +307,25 @@ func (ps *ProductService) UpdateProductsFingerprints(
     numOfRecords    := packetSize
     // done chan
     done            := make(chan int)
+    // search criteria (pointed to not updated products where checksum IS NULL)
+    criteria        := map[string]map[string]string {
+        "where": {"checksum IS": "null"}, "order": {"id": "asc"},
+    }    
     defer close(done) // do not forget...
 
     // main loop
-    for {        
+    var err error
+    for {
         var processedProducts []*Product
+        var products []*Product
         // find packet
-        // products, err := ps.Products.FindAll(ctx, numOfRecords, offset, "id", "asc")
-        var criteria = map[string]map[string]string {
-            "where": {"checksum IS": "null"}, "order": {"id": "asc"},
+        if updateAll {
+            // get all products
+            products, err = ps.Products.FindAll(ctx, numOfRecords, offset, "id", "asc")
+        } else {
+            // get products with NULL checksums
+            products, err = ps.Products.FindAllBy(ctx, criteria, numOfRecords, offset)
 	    }
-        products, err := ps.Products.FindAllBy(ctx, criteria, numOfRecords, offset)
         if err != nil {
             log.Println(err)
             // stop on db error            
@@ -337,6 +353,7 @@ func (ps *ProductService) UpdateProductsFingerprints(
             log.Println(err)
             return fmt.Errorf("Flush failed while UPDATE product's fingerprint. Check logs.")
         }
+        log.Println("Done.")
         counter += len(processedProducts)
         processedProducts = nil
         // next page
@@ -372,7 +389,7 @@ func (ps *ProductService) GenerateProductFingerprint(p *Product) (*Product, erro
     p.Checksum = &hashStr   // use ptr
     return p, nil
 }
-
+// async mode for fanIn / fanOut pattern (or just select/done)
 func (ps *ProductService) generateProductFingerprintAsync(
     done <-chan int,
     prodStream <-chan *Product,
@@ -393,8 +410,7 @@ func (ps *ProductService) generateProductFingerprintAsync(
                 // use "standard func"
                 p, err := ps.GenerateProductFingerprint(p)
                 if err != nil {
-                    // log or send it to err chan
-                    // TODO:
+                    // todo: send it to err chan
                     continue
                 }
                 select {
@@ -405,15 +421,14 @@ func (ps *ProductService) generateProductFingerprintAsync(
             }
         }
     }()
-    return processed	
+    return processed
 }
-
-// fan-in-out helpers
+// fan-in-out helper - creates product stream chan as a source data
 func productStream(done <-chan int, productSet []*Product) <-chan *Product {
 	s := make(chan *Product) // product stream chan
 	go func() {
 		defer close(s)
-        for _, p := range productSet {		    
+        for _, p := range productSet {
 			select {
 			case <-done:
 				return
@@ -423,7 +438,7 @@ func productStream(done <-chan int, productSet []*Product) <-chan *Product {
 	}()
 	return s
 }
-
+// checks if specified user (usable for checks against logged users) can operate on this product
 func (ps *ProductService) canOperateOnProduct(
     ctx context.Context,
     u *User,
@@ -436,10 +451,6 @@ func (ps *ProductService) canOperateOnProduct(
     // otherwise
     return u.GetID() == p.CreatedBy     
 }
-
-// todo async
-// DumbIntoDbAsync (chan. approach <fan-in/fan-out>)
-
 // convert from common `currency` format to cents (integer val.)
 func (ps *ProductService) pConvertToCents(rawVal string) (int64, error) {
     // trim whitespaces
@@ -479,7 +490,6 @@ func (ps *ProductService) pConvertToCents(rawVal string) (int64, error) {
     // finally...
     return (intPart * 100) + decPart, nil
 }
-
 // conv. from cents to `typical` currency format
 func (ps *ProductService) pConvertFromCents(num int64) string {
     sign := ""
