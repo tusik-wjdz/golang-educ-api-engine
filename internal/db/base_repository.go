@@ -44,7 +44,7 @@ type Repository[PT dbc.IEntity] struct {
     forModify			map[int]PT 	// update, delete (consider string in the future)
     lastInsertedIds		[]int
 }
-
+// find by primary key
 func (r *Repository[PT]) Find(ctx context.Context, id int) (PT, bool) {
     e, ok := r.driver.DoFindById(ctx, id)
     if !ok {
@@ -55,7 +55,7 @@ func (r *Repository[PT]) Find(ctx context.Context, id int) (PT, bool) {
     }	
     return e, true
 }
-
+// find by specified criteria
 func (r *Repository[PT]) FindBy(
     ctx context.Context,
     where map[string]string,
@@ -80,7 +80,7 @@ func (r *Repository[PT]) FindBy(
     r.collectDataInAutoPersistMode(result, PFOR_MODIFY)
     return result, nil
 }
-
+// one by specified criteria
 func (r *Repository[PT]) FindOneBy(
     ctx context.Context,
     where map[string]string,
@@ -96,8 +96,7 @@ func (r *Repository[PT]) FindOneBy(
     r.collectDataInAutoPersistMode(results, PFOR_MODIFY)
     return results[0], nil
 }
-
-// todo: order BY
+// all inc. order criteria
 func (r *Repository[PT]) FindAll(
     ctx context.Context,
     limit int,
@@ -121,7 +120,7 @@ func (r *Repository[PT]) FindAll(
     r.collectDataInAutoPersistMode(result, PFOR_MODIFY)
     return result, nil
 }
-
+// all by custom criteria (see docs)
 func (r *Repository[PT]) FindAllBy(
     ctx context.Context,
     criteria map[string]map[string]string,
@@ -137,7 +136,7 @@ func (r *Repository[PT]) FindAllBy(
     r.collectDataInAutoPersistMode(result, PFOR_MODIFY)
     return result, nil
 }
-
+// exec simple query (no results)
 func (r *Repository[PT]) ExecQuery(
     ctx context.Context,
     q string,
@@ -149,7 +148,7 @@ func (r *Repository[PT]) ExecQuery(
     }
     return result.RowsAffected, nil
 }
-
+// do `raw`` query, returns results as DTO (QueryResult) or just a map, see consts
 func (r *Repository[PT]) Query(
     ctx context.Context,
     q string,
@@ -169,13 +168,12 @@ func (r *Repository[PT]) Query(
     default:
         res = dbc.QueryResult[PT]{Ok: false, ErrMsg: "Invalid return data type."}
     }
-    if !res.Ok {        
+    if !res.Ok {
         return nil, fmt.Errorf("Something went wrong: %s", res.ErrMsg)
     }
-
     return toReturn, nil
 }
-
+// collects all entities read by `find`-like methods and store them in memory
 func (r *Repository[PT]) collectDataInAutoPersistMode(dataSet []PT, target uint16) {
     if (!r.AutoPersist || len(dataSet) < 1) {
         // nothing to do
@@ -192,14 +190,12 @@ func (r *Repository[PT]) collectDataInAutoPersistMode(dataSet []PT, target uint1
     }
     // in any other case just silently return
 }
-
-// just a wrapper
+// just a wrapper for "batch" persist for single entity
 func (r *Repository[PT]) Persist(e PT) *Repository[PT] {
-    data := make([]PT, 0)    
+    data := make([]PT, 0)
     return r.PersistSet(append(data, e))
 }
-
-// all
+// "batch" persist
 func (r *Repository[PT]) PersistSet(data []PT) *Repository[PT] {
     for _ , e := range data {
         id := e.GetID()
@@ -213,7 +209,7 @@ func (r *Repository[PT]) PersistSet(data []PT) *Repository[PT] {
     }
     return r
 }
-
+// saves all entities stored in memory in `hold-persist` state
 func (r *Repository[PT]) Flush(ctx context.Context) error {
     if len(r.forCreate) < 1 && len(r.forModify) < 1 {
         // nothing to do
@@ -242,7 +238,7 @@ func (r *Repository[PT]) Flush(ctx context.Context) error {
     })
     return result
 }
-
+// memory-based DELETE for entities in `hold-persist` state (only with real ID)
 func (r *Repository[PT]) Delete(ctx context.Context) (int64, error) {
     if len(r.forModify) < 1 {
         // nothing to do
@@ -255,7 +251,7 @@ func (r *Repository[PT]) Delete(ctx context.Context) (int64, error) {
     }
     return affected, nil
 }
-
+// DELETE by primary key (`id``)
 func (r *Repository[PT]) DeleteById(ctx context.Context, id int) (int64, error) {
     result := r.driver.DoExecRawQuery(ctx, "DELETE FROM $1 WHERE id = $2", r.TableName, id)
     if !result.Ok {
@@ -263,22 +259,20 @@ func (r *Repository[PT]) DeleteById(ctx context.Context, id int) (int64, error) 
     }
     return result.RowsAffected, nil
 }
-
 // save one (must be a pointer to entity)
 func (r *Repository[PT]) Save(ctx context.Context, e PT) error {
     return r.Persist(e).Flush(ctx)
 }
-
 // save many (must be a slice of pointers to entities)
 func (r *Repository[PT]) SaveAll(ctx context.Context, data []PT) error {
     return r.PersistSet(data).Flush(ctx)
 }
-
+// repo-level GC
 func (r *Repository[PT]) PurgeMem() {
     r.forCreate = make([]PT, 0)
     r.forModify = make(map[int]PT)
 }
-
+// helper for using `forModify` ptrs slice in psqlservice
 func (r *Repository[PT]) convertForModifyToSlice() []PT {
     ptrs := make([]PT, len(r.forModify))
     idx := 0
@@ -327,15 +321,15 @@ func (r *Repository[PT]) prepareOrderBy(colAlias string, direction string) (stri
     var directionStr string
     // set and validate direction string (asc, desc)
     switch direction {
-    case ORDER_ASC: directionStr = "ASC"
-    case ORDER_DESC: directionStr = "DESC"
-    default: directionStr = "ASC" // just for sure
+    case ORDER_ASC:     directionStr = "ASC"
+    case ORDER_DESC:    directionStr = "DESC"
+    default:            directionStr = "ASC" // just for sure
     }
     // prepare `order by` syntax
     oStx := fmt.Sprintf(" ORDER BY %s %s", col, directionStr)
     return oStx
 }
-
+// Ctor
 // args: driver interface, model entity 
 func NewRepository[PT dbc.IEntity] (db dbc.IDatabaseDriver[PT]) *Repository[PT] {
     return &Repository[PT] {
@@ -348,12 +342,11 @@ func NewRepository[PT dbc.IEntity] (db dbc.IDatabaseDriver[PT]) *Repository[PT] 
     }
 }
 
-
+// helpers
 func (r *Repository[PT]) GetDriver() dbc.IDatabaseDriver[PT] {
     return r.driver
 }
 
-// helpers
 func (r *Repository[PT]) GetDbEnv() dbc.DbEnv {
     return r.driver.GetDbEnv()
 }
