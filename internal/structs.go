@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 
@@ -30,6 +31,7 @@ type (
         connectionPool      *pgxpool.Pool
         router              *chi.Mux
         logFile             *os.File
+        logger              *log.Logger
         userSessionTime     uint16
         loadedConfig        ApiConfig
     }
