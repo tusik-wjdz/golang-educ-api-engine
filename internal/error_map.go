@@ -19,6 +19,7 @@ const (
     ERR_ASSIGN_ROLES uint16				= iota
     ERR_REVOKE_ROLES uint16				= iota
     ERR_REMOVE_ROLES uint16				= iota
+    ERR_REFRESH_USER_ROLES uint16       = iota
     ERR_FETCH_ROLES uint16				= iota
     // request
     ERR_HIGHER_PRIVILEGES uint16		= iota
@@ -64,6 +65,7 @@ var mainErrorsDict = map[uint16][]string{
     ERR_ENTITY_UDPATE:              {"Can't update: [%s] type.",                                    "P003", "500"},
     ERR_ENTITY_REMOVE:				{"Can't remove: [%s] type.", 						            "P004", "500"},
     ERR_ENTITY_UNSAVED:				{"Can't operate on unsaved entity: [%s] type.", 	            "P005", "500"},
+    // other `general` / `system`
     ERR_ASSIGN_ROLE: 				{"Can't assing role [%s] to user: [%s]", 			            "P006", "500"},
     ERR_UNASSIGN_ROLE: 				{"Can't unassing role [%s] to user: [%s]", 			            "P007", "500"},
     ERR_ASSIGN_ROLES:				{"Can't assing roles to user [%s]", 				            "P008", "500"},
@@ -71,5 +73,6 @@ var mainErrorsDict = map[uint16][]string{
     ERR_REMOVE_ROLES:				{"Unable to remove roles related to user: [%s]", 	            "P010", "500"},
     ERR_INVALID_CREDS: 				{"Invalid login / password. Login failed", 			            "G202", "403"},
     ERR_FETCH_ROLES:				{"Unable to fetch roles for: %s", 					            "G004", "500"},
+    ERR_REFRESH_USER_ROLES:         {"Unable to refresh user's roles. Reason: %s\n",                "P006", "500"},
     ERR_UNKNOWN: 					{"Unknown error occurred. Can't continue", 			            "G000", "500"},
 }
