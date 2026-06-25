@@ -85,8 +85,7 @@ func InitApi(minMode bool) (*ApiEnvironment, error) {
         // if minimalistic mode then we've got what we need so...
         return apiEnv, nil
     }
-    // since now...
-    defer CleanExit()
+    // otherwise
     // try load endpoints configuration from json
     log.Println("Loading route map / endpoints configuration... (file ./conf/routes.json)")
     if !importConfig() {
