@@ -36,13 +36,10 @@ const (
     endpointName contextKey     = "endpointName"
     endpointSpec contextKey     = "endpointSpec"
     errorInfoKey contextKey     = "errorInfo"
-
     // strings
     panicMsg string             = "Abnormal program termination... "
-
     // paths
     mainLogPath string          = "./logs"
-
 )
 
 // globals
@@ -50,9 +47,9 @@ var apiEnv *ApiEnvironment
 var UserRoles map[string]*Role
 var SystemUser *User
 
-// todo: refreshUserRoles
-
-func InitApi() (*ApiEnvironment, error) {
+// region core
+// init api (ctor)
+func InitApi(minMode bool) (*ApiEnvironment, error) {
     // init ApiEnv struct
     apiEnv                      = &ApiEnvironment{}
     // also new context
@@ -66,12 +63,6 @@ func InitApi() (*ApiEnvironment, error) {
     // set loaded config
     apiEnv.loadedConfig = config
 
-    // try load endpoints configuration from json
-    fmt.Println("Loading route map / endpoints configuration... (file ./conf/routes.json)")
-    if !importConfig() {
-        return apiEnv, ErrorFactory(ERR_LOAD_ROUTES_CONF)
-    }
-    fmt.Println("Done.")
     // try setup connection
     pool, err                   := setupConnection(ctx)
     if err != nil {
@@ -80,74 +71,47 @@ func InitApi() (*ApiEnvironment, error) {
     }
     fmt.Println("Connection with DB established.")
     // set connection pool
-    apiEnv.connectionPool       = pool
+    apiEnv.connectionPool   = pool
 
-    // setup (and open) log file
-    logFile, err                := setLogFile("")
+    // setup (and open) log file 
+    logFile, err            := setLogFile("")
     if err != nil {
         return apiEnv, fmt.Errorf(panicMsg + "Can't create main API log file.")
     }
-    // set log file
-    apiEnv.logFile              = logFile
-
+    // setup logger w. logfile stream
+    apiEnv.logger           = setupLogger(logFile, "")
+    apiEnv.logFile          = logFile
+    if minMode {
+        // if minimalistic mode then we've got what we need so...
+        return apiEnv, nil
+    }
+    // since now...
+    defer CleanExit()
+    // try load endpoints configuration from json
+    log.Println("Loading route map / endpoints configuration... (file ./conf/routes.json)")
+    if !importConfig() {
+        errMsg := ErrorFactory(ERR_LOAD_ROUTES_CONF)
+        log.Println(errMsg)
+        return apiEnv, errMsg
+    }
+    fmt.Println("Done.")
+    // then...
     // set up router
-    apiEnv.router               = setupRouter(apiEnv.logFile)
-
+    apiEnv.router           = setupRouter(apiEnv.logger)
     // fetch user roles end set in global scope 
-    UserRoles, err              = getUserRoles(ctx)
+    UserRoles, err          = getUserRoles(ctx)
     if err != nil {
         return apiEnv, fmt.Errorf(panicMsg + "Can't fetch user roles.")
     }
-
     // def. user session time
     ust, err := ParseUint16(config.General["session_time"])
     if err != nil {
         return apiEnv, fmt.Errorf(panicMsg + "Invalid value for session_time. Check configuration.")
     }
-    apiEnv.userSessionTime      = ust
+    apiEnv.userSessionTime  = ust
     // return (just for transparency)
     return apiEnv, nil
 }
-
-// main config loader
-func loadApiConfig() (ApiConfig, error) {
-	conf := ApiConfig{}
-	data, err := os.ReadFile("./conf/settings.json")
-    if err != nil {
-        return conf, fmt.Errorf("Main config file not found. Check your file structure.")
-    }
-    if err := json.Unmarshal(data, &conf); err != nil {
-        return conf, fmt.Errorf("Conf. file parse error: %w", err)
-    }
-    var reqFields   = []string{}
-    var section     = map[string]string{}
-    verifySection   := func() (bool, string) {
-        for _, field := range reqFields {
-            _, exists := section[field]
-            if !exists {
-                return false, field
-            }
-        }
-        return true, ""
-    }
-    // section `general`
-    reqFields, section = []string{"api_hostname", "api_port", "api_log_pfx", "session_time"}, conf.General
-    if ok, missedField := verifySection(); ! ok {
-        return conf, fmt.Errorf("Conf. file error. Required setting [%s] is missing (section `general`).", missedField)
-    }
-    // section `db`
-    reqFields, section = []string{"db_user", "db_pass", "db_host", "db_port", "db_name"}, conf.Db
-    if ok, missedField := verifySection(); ! ok {
-        return conf, fmt.Errorf("Conf. file error. Required setting [%s] is missing (section `db`).", missedField)
-    }    	
-    return conf, nil
-}
-
-// getter for config 
-func (*ApiEnvironment) GetConfig() ApiConfig {
-    return GetEnv().loadedConfig
-}
-
 // main func for API-listen-loop
 func Listen() bool {
     apiEnv := GetEnv()
@@ -206,43 +170,89 @@ func Listen() bool {
     log.Println("Done. See you next time.")
     return true
 }
+// endregion
 
+// region getters
 // API Env getter
 func GetEnv() *ApiEnvironment {
     return apiEnv
 }
-
-// Graceful shutdown
-func CleanExit() {
-    if apiEnv == nil {
-        // nothing to do
-        return
-    }
-    // close connection pool
-    log.Println("Closing all connections in the pool...")
-    apiEnv.GetConnPool().Close()
-    // close log file
-    log.Println("Done.")
-    apiEnv.logFile.Close()
+// getter for config 
+func (*ApiEnvironment) GetConfig() ApiConfig {
+    return GetEnv().loadedConfig
 }
-
 // safe getters
 func (ae *ApiEnvironment) GetRouter() *chi.Mux {
     return ae.router
 }
-
+// connection pool
 func (ae *ApiEnvironment) GetConnPool() *pgxpool.Pool {
     return ae.connectionPool
 }
+// for validated incoming data (by schema_validator) transferred via context
+// (very important in handlers)
+func GetValidatedDataFromContext(ctx context.Context) map[string]IncomingValue {
+    if data, ok := ctx.Value(validatedDataKey).(map[string]IncomingValue); ok {
+        return data
+    }
+    return nil
+}
+// for endpoint specification described in conf. file
+func GetTargetEndpointSpecsFromContext(ctx context.Context) Route {
+    if specs, ok := ctx.Value(endpointSpec).(Route); ok {
+        return specs
+    }
+    // empty route
+    return Route{}
+}
+// for User entity (ptr) via ctx (easy way to fetch logged user)
+func GetUserPtrFromContext(ctx context.Context) *User {
+    if uPtr, ok := ctx.Value(userEntityPtrKey{}).(*User); ok {
+        return uPtr
+    }
+    return &User{}
+}
+// endregion
 
+// region boot-api-cfg
+// main config loader
+func loadApiConfig() (ApiConfig, error) {
+	conf := ApiConfig{}
+	data, err := os.ReadFile("./conf/settings.json")
+    if err != nil {
+        return conf, fmt.Errorf("Main config file not found. Check your file structure.")
+    }
+    if err := json.Unmarshal(data, &conf); err != nil {
+        return conf, fmt.Errorf("Conf. file parse error: %w", err)
+    }
+    var reqFields   = []string{}
+    var section     = map[string]string{}
+    verifySection   := func() (bool, string) {
+        for _, field := range reqFields {
+            _, exists := section[field]
+            if !exists {
+                return false, field
+            }
+        }
+        return true, ""
+    }
+    // section `general`
+    reqFields, section = []string{"api_hostname", "api_port", "api_log_pfx", "session_time"}, conf.General
+    if ok, missedField := verifySection(); ! ok {
+        return conf, fmt.Errorf("Conf. file error. Required setting [%s] is missing (section `general`).", missedField)
+    }
+    // section `db`
+    reqFields, section = []string{"db_user", "db_pass", "db_host", "db_port", "db_name"}, conf.Db
+    if ok, missedField := verifySection(); ! ok {
+        return conf, fmt.Errorf("Conf. file error. Required setting [%s] is missing (section `db`).", missedField)
+    }
+    return conf, nil
+}
 // setup Chi Router
-func setupRouter(logFile *os.File) *chi.Mux {
-    r := chi.NewRouter()    
-    // logger
-    multiOutput := io.MultiWriter(os.Stdout, logFile)
-    log.SetOutput(multiOutput)
+func setupRouter(logger *log.Logger) *chi.Mux {
+    r := chi.NewRouter()
     r.Use(middleware.RequestLogger(&middleware.DefaultLogFormatter{
-        Logger: log.New(multiOutput, "", log.LstdFlags),
+        Logger: logger,
         NoColor: true,
     }))
     // native recoverer
@@ -274,7 +284,6 @@ func setupRouter(logFile *os.File) *chi.Mux {
     }
     return r
 }
-
 // setup pg connection (using PGX)
 func setupConnection(ctx context.Context) (*pgxpool.Pool, error) {    
     cfg := apiEnv.loadedConfig.Db
@@ -293,7 +302,12 @@ func setupConnection(ctx context.Context) (*pgxpool.Pool, error) {
     }
     return pool, nil
 }
-
+// setup logger (log package)
+func setupLogger(logFile *os.File, prefix string) *log.Logger {
+    multiOutput := io.MultiWriter(os.Stdout, logFile)
+    log.SetOutput(multiOutput)
+    return log.New(multiOutput, prefix, log.LstdFlags)
+}
 // opens main log file and returns resource (also error)
 func setLogFile(logName string) (*os.File, error) {
     createdAt := time.Unix(time.Now().Unix(), 0).Format("2006-01-02_150405")
@@ -303,7 +317,7 @@ func setLogFile(logName string) (*os.File, error) {
     logPath, err := filepath.Abs(mainLogPath)
     if err != nil {
         return nil, err
-    }    
+    }
     pathOk, err := FPathExists(logPath)
     if err != nil { return nil, err } // should panic and stop execution
     // create path for logs if not exists
@@ -312,42 +326,18 @@ func setLogFile(logName string) (*os.File, error) {
             return nil, err // panic!
         }
     }
-    // build full path to log file    
+    // build full path to log file
     logFilePath := filepath.Join(logPath, logName + ".log")
     // try create file for write
-    file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)    
+    file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
     if err != nil {
         return nil, err
     }
     return file, nil
 }
+// endregion
 
-// getters
-// for incoming values (via context)
-func GetValidatedDataFromContext(ctx context.Context) map[string]IncomingValue {
-    if data, ok := ctx.Value(validatedDataKey).(map[string]IncomingValue); ok {
-        return data
-    }
-    return nil
-}
-// for endpoint specification described in conf. file
-func GetTargetEndpointSpecsFromContext(ctx context.Context) Route {
-    if specs, ok := ctx.Value(endpointSpec).(Route); ok {
-        return specs
-    }
-    // empty route
-    return Route{}
-}
-// for User entity (ptr) via ctx (easy way to fetch logged user)
-func GetUserPtrFromContext(ctx context.Context) *User {
-    if uPtr, ok := ctx.Value(userEntityPtrKey{}).(*User); ok {
-        return uPtr
-    }
-    return &User{}
-}
-// helper methods
-
-// Middleware
+// region middleware
 func RegisterRequestMiddleware(next http.Handler) http.Handler {
     return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
         // fetch context from request
@@ -362,7 +352,7 @@ func RegisterRequestMiddleware(next http.Handler) http.Handler {
 func CheckRouteMiddleware(next http.Handler) http.Handler {
     return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
         // try to find target route in predefined array
-        // r.use(middleware.StripSlashes(next)) TODO: // trailing slashes
+        // r.use(middleware.StripSlashes(next)) todo: // trailing slashes
         ctx := r.Context()
         for _,route := range Routes {
             // 1) try find route
@@ -486,6 +476,9 @@ func AuthMiddleware(next http.Handler) http.Handler {
         next.ServeHTTP(rw, r.WithContext(ctx))
     })
 }
+// endregion
+
+// region error-intercepting
 // error interceptor for handling custom / API-related errors
 func ErrorInterceptor(next CustomHandler) http.HandlerFunc {
     return func(rw http.ResponseWriter, r *http.Request) {
@@ -502,8 +495,9 @@ func ErrorInterceptor(next CustomHandler) http.HandlerFunc {
         http.Error(rw, "Something went wrong...", http.StatusBadRequest)
     }
 }
+// endregion
 
-// handlers
+// region custom-responds
 // general respond
 func Respond[T any] (rw http.ResponseWriter, r *http.Request, data T) error {
     // todo: consider format custom err (also err param)
@@ -543,8 +537,9 @@ func RespondWithErrorCtx[T any] (rw http.ResponseWriter, r *http.Request, data T
     }
     rw.Write([]byte(jsonBytes))
 }
+// endregion
 
-// other methods
+// region other-methods
 func GetLoggedUser(ctx context.Context) (*User, bool) {
     u, ok := ctx.Value(userEntityKey).(User);
     if ! ok {
@@ -562,7 +557,7 @@ func getUserByToken(ctx context.Context, token string) (*User, bool) {
     // in any other case
     return u, true
 }
-// creates anonymous user instance
+// creates anonymous user instance (deprecated)
 func createAnonymous() *User {
     // mock
     return &User{
@@ -597,7 +592,21 @@ func fetchBearerToken(r *http.Request) (string, bool) {
     // not found
     return "", false
 }
-// roles getters
+// endregion
+
+// region roles-related
+// refresh user roles in global scope
+func RefreshRoles(ctx context.Context) bool {
+    var err error
+    // fetch user roles end set in global scope
+    UserRoles, err = getUserRoles(ctx)    
+    if err != nil {
+        log.Println(ErrorFactory(ERR_REFRESH_USER_ROLES, err))
+        return false
+    }
+    return true
+}
+// gets roles for specified user
 func getRolesForUser(u User) map[string]*Role {
     roles := u.Roles
     return roles
@@ -611,3 +620,20 @@ func getUserRoles(ctx context.Context) (map[string]*Role, error) {
     }
     return roles, nil
 }
+// endregion
+
+// region shutdown
+// Graceful shutdown
+func CleanExit() {
+    if apiEnv == nil {
+        // nothing to do
+        return
+    }
+    // close connection pool
+    log.Println("Closing all connections in the pool...")
+    apiEnv.GetConnPool().Close()
+    // close log file
+    log.Println("Done.")
+    apiEnv.logFile.Close()
+}
+// endregion
