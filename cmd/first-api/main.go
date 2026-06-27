@@ -11,7 +11,7 @@ import (
 
 func main() {    
     args := os.Args[1:]    
-    fmt.Println("Educ. Golang API v0.0.34 (270625)\nAuthor: W.Dzieciol (educ. purposes)")
+    fmt.Println("Educ. Golang API v0.0.34 (260627)\nAuthor: W.Dzieciol (educ. purposes)")
     // checks args
     // todo: add dedicated CLI commands parser
     for _, arg := range args {
