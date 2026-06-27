@@ -13,6 +13,9 @@ type (
         DbOwnerName		string
         lMigrationName  string
     }
+
+    MigrateMe func(ctx context.Context, pool *pgxpool.Pool, dbOwner string) error;
+
     PGMigrationHandler func(
         ctx context.Context,
         m *Migration,
@@ -20,6 +23,21 @@ type (
 )
 
 // main migration "runner"
+func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dbOwner string) error {
+    // run migrations in order
+    for _, m := range Migrations {
+        err := m(ctx, pool, dbOwner)
+        if err != nil {
+            log.Println(err)
+            return fmt.Errorf(
+                "Migration process incompleted. Reason: %w. Check logs and configuration.",
+                err,
+            )
+        }
+    }
+    return nil
+}
+// run single migration
 // API db_name (even if not exist) and user_name, host and port MUST BE CONFIGURED before launch this
 func RunMigration(
     ctx context.Context,
