@@ -27,7 +27,7 @@ func GetUserService() *UserService {
 // User by `id`
 func (us *UserService) Find(ctx context.Context, id int) (*User, bool) {
     u, ok := us.Users.Find(ctx, id)
-    if ! ok {
+    if !ok {
         return u, false
     }
     if err := us.OrganizeUserEntity(ctx, u, false); err != nil {
@@ -125,17 +125,17 @@ func (us *UserService) UpdatePersonalInfo(
         // check privileges (roles)
         if us.IsPrivileged(ctx, admin) {
             for k, v := range incomingData {
-            switch k {
-            case "email":
-                if ApplyStrV(&u.Email, v) { isModified = true }
-            case "phrase":
-                if ApplyStrV(&u.PassPhrase, v) { isModified = true }
-            }
+                switch k {
+                case "email":
+                    if ApplyStrV(&u.Email, v) { isModified = true }
+                case "phrase":
+                    if ApplyStrV(&u.PassPhrase, v) { isModified = true }
+                }
             }
         }
     }
     // if not modified....
-    if (! isModified) {
+    if !isModified {
         // nothing to do
         return u, nil
     }
@@ -145,8 +145,8 @@ func (us *UserService) UpdatePersonalInfo(
 // `general` update on User entity
 func (us *UserService) Update(ctx context.Context, u *User) (*User, error) {
     if u.ID < 1 {
-        return u, ErrorFactory(ERR_ENTITY_UNSAVED, "User")        
-    }    
+        return u, ErrorFactory(ERR_ENTITY_UNSAVED, "User")
+    }
     // small lifting before save
     u.UpdatedAt = time.Now().Unix() // fix update time (todo: only if changed)
     // persist due to strategy then save
@@ -162,10 +162,10 @@ func (us *UserService) Update(ctx context.Context, u *User) (*User, error) {
 func (us *UserService) Remove(ctx context.Context, u *User) error {
     uID := u.GetID()
     if uID == 0 {
-        return ErrorFactory(ERR_ENTITY_UNSAVED, "User")        
+        return ErrorFactory(ERR_ENTITY_UNSAVED, "User")
     }
     pool := GetEnv().GetConnPool()
-    err := dbc.RunInTx(ctx, pool, func(contextWithTx context.Context) error {        
+    err := dbc.RunInTx(ctx, pool, func(contextWithTx context.Context) error {
         _, err := us.Users.Persist(u).Delete(contextWithTx)
         if err != nil {
             log.Println(fmt.Errorf("Unable to remove USER entity. Reason: %s", err))
@@ -187,11 +187,11 @@ func (us *UserService) Remove(ctx context.Context, u *User) error {
     return err
 }
 // assigns roles to user
-func (us *UserService) AssignRoles(ctx context.Context, u *User, names []string) (error) {    
-    args := make([]any, 0)
-    q := "INSERT INTO public.user2roles (user_id,role_id,created_at,updated_at) VALUES ($1,$2,$3,$4)"
-
-    roles, err := us.Roles.FindAll(ctx, 0, 0, "id", db.ORDER_ASC)
+func (us *UserService) AssignRoles(ctx context.Context, u *User, names []string) error {
+    args    := make([]any, 0)
+    q       := "INSERT INTO public.user2roles (user_id,role_id,created_at,updated_at) VALUES ($1,$2,$3,$4)"
+    // try fetch roles (based on PK)
+    roles, err  := us.Roles.FindAll(ctx, 0, 0, "id", db.ORDER_ASC)
     if err != nil {
         return err
     }
@@ -214,8 +214,13 @@ func (us *UserService) AssignRoles(ctx context.Context, u *User, names []string)
     })
     return err
 }
-// assigns / revokes roles to user 
-func (us *UserService) SetRoles(ctx context.Context, u *User, action string, names []string) (error) {
+// assigns / revokes roles to user
+func (us *UserService) SetRoles(
+    ctx context.Context,
+    u *User,
+    action string,
+    names []string,
+) error {
     args    := make([]any, 0)
     qIns    := "INSERT INTO public.user2roles (user_id,role_id,created_at,updated_at) VALUES ($1,$2,$3,$4)"
     qDel    := "DELETE FROM public.user2roles WHERE user_id = $1 AND role_id = $2"
@@ -234,8 +239,8 @@ func (us *UserService) SetRoles(ctx context.Context, u *User, action string, nam
                 if passedName == r.Name {
                     switch action {
                     case "assign":
-                        query = qIns
-                        args = []any{uid, r.GetID(), cTime, cTime}
+                        query   = qIns
+                        args    = []any{uid, r.GetID(), cTime, cTime}
                     case "revoke":
                         if (len(u.Roles) < 1) {
                             us.FetchRoles(ctx, u)
@@ -245,8 +250,8 @@ func (us *UserService) SetRoles(ctx context.Context, u *User, action string, nam
                             // nothing to do so go to next role
                             continue
                         }
-                        query = qDel
-                        args = []any{uid, r.GetID()}
+                        query   = qDel
+                        args    = []any{uid, r.GetID()}
                     default:
                         return fmt.Errorf("Invalid action for `setRoles`.")
                     }
@@ -281,33 +286,34 @@ func (us *UserService) AssignRole(ctx context.Context, name string, id int, u *U
     // get role
     PT, err := dbc.DoRawQueryGetStruct[Role](ctx, pool, "SELECT * FROM public.roles " + whereStr + " LIMIT 1", param)
     if err != nil || len(PT) != 1 {
+        // log 
+        log.Printf("Can't fetch role from DB. Reason: [%s]\n", err)
+        // then return error
         return fmt.Errorf("Unable to fetch role defined as: %v", param)
     }
     r 		:= PT[len(PT)-1]
-    // prepare args
+    // prepare query and args
     cTime   := time.Now().Unix()
+    q       := "INSERT INTO public.user2roles (user_id, role_id, created_at, updated_at) VALUES ($1,$2,$3,$4)"
     args 	:= []any{u.ID, r.ID, cTime, cTime}
     // try assign
-    _ , err = dbc.DoExecRawQuery[dbc.IEntity](
-        ctx,
-        pool,
-        "INSERT INTO public.user2roles (user_id, role_id, created_at, updated_at) VALUES ($1,$2,$3,$4)",
-        args...,
-    )
-    
-    if err != nil {
-        return fmt.Errorf("Unable to assign specified role to user.") // todo: params
+    if _, err = dbc.DoExecRawQuery[dbc.IEntity](ctx, pool, q, args...,); err != nil {
+        // log
+        log.Printf(
+            "Unable assign role: [ID:%d:'%s'], to user [%d]. Reason: [%s]\n",
+            r.ID, r.Name, u.ID, err,
+        )
+        return fmt.Errorf("Unable to assign specified role [%s] to user. Check logs.", r.Name)
     }
     return nil
 }
-// TODO: LAX
 // gets User's roles from DB
 func (*UserService) getUserRoles(ctx context.Context, u *User) ([]*Role, error) {
     // get connection pool
     pool := GetEnv().GetConnPool()
     id := u.ID
     if id <= 0 {
-        return nil, ErrorFactory(ERR_ENTITY_UNSAVED, "User")        
+        return nil, ErrorFactory(ERR_ENTITY_UNSAVED, "User")
     }
     sqlStr := `
     SELECT r.* FROM roles AS r
