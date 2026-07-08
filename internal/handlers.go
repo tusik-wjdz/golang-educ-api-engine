@@ -9,17 +9,127 @@ package internal
  * All errors SHOULD be prepared in services and
  * ... also ALL ERRORS MUST contains NON-SENSITIVE informations
  * e.g. "User not found.", "Can't read data. Try later..." or something like that.
- * All sensitive data MUST be logged in services or OPTIONALLY 
+ * All sensitive data MUST be logged in services or OPTIONALLY
  * may be use in response but ONLY IN DEBUG MODE!
  *
  * Well, thats it.
  */
 
 import (
-    "fmt"
-    "net/http"
-    "strconv"
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"strconv"
 )
+
+//==============================
+// ADMIN
+//==============================
+
+// Route: /users/assign_role
+func AssignRole(rw http.ResponseWriter, r *http.Request) error {
+    ctx 		    := r.Context()
+    msg, u, err     := roleActionHelper(ctx, ROLE_ACT_ASSIGN)
+    if err != nil {
+        return err
+    }
+    result := []any{msg, u}
+    return Respond(rw, r, result)
+}
+// Route: /users/revoke_role
+func RevokeRole(rw http.ResponseWriter, r *http.Request) error {
+    ctx 		    := r.Context()
+    msg, u, err     := roleActionHelper(ctx, ROLE_ACT_REVOKE)
+    if err != nil {
+        return err
+    }
+    result := []any{msg, u}
+    return Respond(rw, r, result)
+}
+// small helper with shared code
+func roleActionHelper(ctx context.Context, action string) (string, *User, error) {
+    // get service
+    us			:= GetUserService()
+    // 2nd layer check (is call from admin-like user?)
+    _, err      := us.IsCallFromAdmin(ctx)
+    if err != nil {
+        return "", &User{}, err
+    }    
+    // fetch args from request (id + roleAlias)
+    data        := GetValidatedDataFromContext(ctx)
+    uID         := FetchNum[int](data["id"])
+    roleAlias   := data["role_alias"].GetText()
+    // then try find specified user
+    u, err      := tryToFetchUserToOperateOn(ctx, us, uID)
+    if err != nil {
+        return "", &User{}, err
+    }
+    // finally try to set roles
+    roles, err := us.FindRolesByAliases(ctx, []string{roleAlias})
+    if err != nil {
+        return "", &User{}, err
+    }
+    if err := us.SetRoles(ctx, u, action, roles); err != nil {
+        // log
+        log.Println(err)
+        return "", u, ErrorFactory(ERR_SETUP_ROLES_HANDLER_LVL, uID)
+    }
+    msg := fmt.Sprintf("Role action: %s, role: %s -> %d. Done!", action, roleAlias, uID)
+    // reorganize user entity
+    u.Roles = nil
+    us.OrganizeUserEntity(ctx, u, false)
+    return msg, u, nil
+}
+// shows users collection by limit, offset
+// Route: /users/list
+func ListUsers(rw http.ResponseWriter, r *http.Request) error {
+    ctx			:= r.Context()
+    data  		:= GetValidatedDataFromContext(ctx)
+    list, err 	:= GetUserService().List(
+        ctx,		
+        FetchNum[int](data["limit"]),
+        FetchNum[int](data["offset"]),
+    )
+    if err == nil { // looks ok, so...
+        return Respond(rw, r, list) 
+    }
+    return err
+}
+// removes specified user
+// Route: /users/delete
+func DeleteUser(rw http.ResponseWriter, r *http.Request) error {
+    ctx 		:= r.Context()
+    us			:= GetUserService()
+    // it must be done (we don't need admin entity at all, but we have to check logged user -> `2nd layer check`)
+    _, err      := us.IsCallFromAdmin(ctx)
+    if err != nil {
+        return err
+    }
+    // then try find user
+    uID         := FetchNum[int](GetValidatedDataFromContext(ctx)["id"])
+    u, err      := tryToFetchUserToOperateOn(ctx, us, uID)
+    if err != nil {
+        return err
+    }
+    // try remove
+    if err := us.Remove(ctx, u); err == nil {
+        return Respond(rw, r, []string{strconv.Itoa(uID), "Deleted"})
+    }
+    return err
+}
+// helper for admins
+func tryToFetchUserToOperateOn(ctx context.Context, us *UserService, id int) (*User, error) {    
+    // try find user
+    u, exists := us.Find(ctx, id)
+    if !exists {
+        return nil, ErrorFactory(ERR_USER_NOT_FOUND, strconv.Itoa(id))
+    }
+    return u, nil
+}
+//==============================
+// ADMIN END
+//==============================
 
 //==============================
 // USERS
@@ -31,7 +141,7 @@ func Login(rw http.ResponseWriter, r *http.Request) error {
     data 	:= GetValidatedDataFromContext(ctx)
     login, phrase := data["email"].GetText(), data["phrase"].GetText()
     u, err := GetAuthService().TryLoginViaMail(ctx, login, phrase)
-    if(err != nil) {
+    if err != nil {
         return ErrorFactory(ERR_LOGIN_ERROR)
     }
     var result = map[string]any {
@@ -40,7 +150,6 @@ func Login(rw http.ResponseWriter, r *http.Request) error {
     }
     return Respond(rw, r, result)	
 }
-
 // Route: /users/logout
 func Logout(rw http.ResponseWriter, r *http.Request) error {
     err := GetAuthService().Logout(r.Context())
@@ -49,7 +158,6 @@ func Logout(rw http.ResponseWriter, r *http.Request) error {
     }
     return Respond(rw, r, "Logged out! See you next time.")
 }
-
 // Route: /users/register
 func RegisterUser(rw http.ResponseWriter, r *http.Request) error {
     ctx 	:= r.Context()
@@ -74,7 +182,6 @@ func RegisterUser(rw http.ResponseWriter, r *http.Request) error {
     }
     return Respond(rw, r, result)
 }
-
 // Route: /users/update
 func UpdateUser(rw http.ResponseWriter, r *http.Request) error {
     u := &User{}
@@ -106,51 +213,6 @@ func UpdateUser(rw http.ResponseWriter, r *http.Request) error {
     }
     return Respond(rw, r, updatedUser)	
 }
-
-// removes specified user
-// Route: /users/delete
-func DeleteUser(rw http.ResponseWriter, r *http.Request) error {
-    ctx 		:= r.Context()
-    // just for sure
-    us			:= GetUserService()
-    admin, ok 	:= GetAuthService().GetLoggedUserPtr(ctx)
-    if ! ok {
-        // somehow there's no logged user / error while trying to get from context or via token
-        return ErrorFactory(ERR_CANT_FETCH_LOGGED_USER)
-    }
-    if ! us.IsPrivileged(ctx, admin) {
-        return ErrorFactory(ERR_OPERATION_NOT_PERMITTED)
-    }
-    // then
-    id  := FetchNum[int](GetValidatedDataFromContext(ctx)["id"])
-    // try find user
-    u, exists := us.Find(ctx, id)
-    if ! exists {
-        return ErrorFactory(ERR_USER_NOT_FOUND, strconv.Itoa(id))
-    }
-    err := us.Remove(ctx, u)
-    if err == nil {
-        return Respond(rw, r, []string{strconv.Itoa(id), "Deleted"})
-    }
-    return err
-}
-
-// shows users collection by limit, offset
-// Route: /users/list
-func ListUsers(rw http.ResponseWriter, r *http.Request) error {
-    ctx			:= r.Context()
-    data  		:= GetValidatedDataFromContext(ctx)
-    list, err 	:= GetUserService().List(
-        ctx,		
-        FetchNum[int](data["limit"]),
-        FetchNum[int](data["offset"]),
-    )
-    if err == nil { // looks ok, so...
-        return Respond(rw, r, list) 
-    }
-    return err
-}
-
 //==============================
 // USERS END
 //==============================
@@ -194,7 +256,6 @@ func HelloAction(rw http.ResponseWriter, r *http.Request) error {
 
     return Respond(rw,r,result)	
 }
-
 
 func MemberZoneAction(rw http.ResponseWriter, r *http.Request) error {
     data := GetValidatedDataFromContext(r.Context())
