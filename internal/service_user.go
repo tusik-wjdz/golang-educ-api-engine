@@ -9,6 +9,19 @@ import (
 	dbc "test-api/internal/pkg/psqlservice"
 	"time"
 )
+// role-actions aliases
+const (
+    ROLE_ACT_ASSIGN = "assign"
+    ROLE_ACT_REVOKE = "revoke"
+)
+// aliases dictionary for def. roles in system
+var UserRoleAliasesDict map[string]string = map[string]string{
+    "system":   USER_ROLE_SYSTEM,
+    "admin":    USER_ROLE_ADMIN,
+    "trusted":  USER_ROLE_TRUSTED,
+    "common":   USER_ROLE_COMMON,
+    "guest":    USER_ROLE_GUEST,
+}
 
 type UserService struct {
     Users *db.Repository[*User]
@@ -85,7 +98,7 @@ func (us *UserService) Create(
         return &User{}, ErrorFactory(ERR_ENTITY_SAVE, "User")
     }
     revert := false
-    err = us.SetRoles(ctx, &u, "assign", []string{USER_ROLE_TRUSTED, USER_ROLE_COMMON})
+    err     = us.AssignRoles(ctx, &u, []string{USER_ROLE_TRUSTED, USER_ROLE_COMMON})
     if err != nil {
         // we have to revet but...
         revert = true
@@ -205,6 +218,9 @@ func (us *UserService) AssignRoles(ctx context.Context, u *User, names []string)
                     args = []any{uid, r.GetID(), cTime, cTime}
                     _ , err := dbc.DoExecRawQuery[*User2Role](contextWithTx, pool, q, args...)
                     if err != nil {
+                        // details write to log
+                        log.Println(err)
+                        // and return `general` error (todo: ErrorFactory)
                         return fmt.Errorf("Unable to assign specified roles.")
                     }
                 }
@@ -214,53 +230,50 @@ func (us *UserService) AssignRoles(ctx context.Context, u *User, names []string)
     })
     return err
 }
-// assigns / revokes roles to user
+// assigns / revokes roles to user (uses ptrs to roles)
 func (us *UserService) SetRoles(
     ctx context.Context,
     u *User,
     action string,
-    names []string,
+    roles []*Role,
 ) error {
+    uid     := u.GetID()
+    if len(roles) < 1 {
+        log.Println("At least one role (ptr) must be provided. Got empty dataset.")
+        return ErrorFactory(ERR_SETUP_ROLES_HANDLER_LVL, uid)
+    }
     args    := make([]any, 0)
     qIns    := "INSERT INTO public.user2roles (user_id,role_id,created_at,updated_at) VALUES ($1,$2,$3,$4)"
     qDel    := "DELETE FROM public.user2roles WHERE user_id = $1 AND role_id = $2"
-    query   := ""
-
-    roles, err := us.Roles.FindAll(ctx, 0, 0, "id", db.ORDER_ASC)
-    if err != nil {
-        return err
-    }
-    uid     := u.GetID()
+    query   := ""    
     pool    := GetEnv().GetConnPool()
     cTime   := time.Now().Unix()
-    err = dbc.RunInTx(ctx, pool, func(contextWithTx context.Context) error {
+    // do the main job in Tx
+    err     := dbc.RunInTx(ctx, pool, func(contextWithTx context.Context) error {
         for _, r := range roles {
-            for _, passedName := range names {
-                if passedName == r.Name {
-                    switch action {
-                    case "assign":
-                        query   = qIns
-                        args    = []any{uid, r.GetID(), cTime, cTime}
-                    case "revoke":
-                        if (len(u.Roles) < 1) {
-                            us.FetchRoles(ctx, u)
-                        }
-                        _, exists := u.Roles[r.Name]
-                        if !exists {
-                            // nothing to do so go to next role
-                            continue
-                        }
-                        query   = qDel
-                        args    = []any{uid, r.GetID()}
-                    default:
-                        return fmt.Errorf("Invalid action for `setRoles`.")
-                    }
-                    // execute query
-                    _ , err := dbc.DoExecRawQuery[*User2Role](contextWithTx, pool, query, args...)
-                    if err != nil {
-                        return fmt.Errorf("Unable to assign specified roles.")
-                    }
+            switch action {
+            case ROLE_ACT_ASSIGN:
+                query   = qIns
+                args    = []any{uid, r.GetID(), cTime, cTime}
+            case ROLE_ACT_REVOKE:
+                if len(u.Roles) < 1 {
+                    us.FetchRoles(ctx, u)
                 }
+                _, exists := u.Roles[r.Name]
+                if !exists {
+                    // nothing to do so go to next role
+                    continue
+                }
+                query   = qDel
+                args    = []any{uid, r.GetID()}
+            default:
+                return fmt.Errorf("Invalid action for `setRoles`.")
+            }
+            // execute query
+            _ , err := dbc.DoExecRawQuery[*User2Role](contextWithTx, pool, query, args...)
+            if err != nil {
+                log.Println(err)
+                return fmt.Errorf("Unable to assign specified roles.")
             }
         }
         return nil
@@ -352,6 +365,43 @@ func (us *UserService) GetRolesFromDb(ctx context.Context) (map[string]*Role, er
     }
     return result, nil
 }
+// tries to find roles via passed aliases
+func (us *UserService) FindRolesByAliases(ctx context.Context, aliases []string) ([]*Role, error) {
+    var err error
+    var roleNames   = []string{} // real role names
+    var roles       = []*Role{}  // pointers to role entities
+    // check aliases first
+    for _, alias := range aliases {
+        roleName, exists := UserRoleAliasesDict[alias]
+        // check if exists
+        if !exists {
+            return nil, ErrorFactory(ERR_INV_ALIAS_FOR_ROLE, alias)
+        }
+        // then add
+        roleNames = append(roleNames, roleName)
+    }
+    // check and reload roles if required
+    if UserRoles == nil {
+        UserRoles, err = us.GetRolesFromDb(ctx)
+        if err != nil {
+            log.Println(err)
+            return nil, ErrorFactory(ERR_LOAD_ROLESCONF_DB)
+        }
+    }
+    // time to fetch pointers to roles by real role name
+    for _, roleName := range roleNames {
+        role, exists := UserRoles[roleName]
+        if !exists {
+            // something is not configured properly, we have to termiante whole action
+            return nil, ErrorFactory(ERR_INV_ALIAS_CFG_FOR_ROLES)
+        }
+        // now we can add this role to result
+        roles = append(roles, role)
+    }
+    return roles, nil
+}
+
+// todo: roleExists
 // reverts "create user" action
 func (us *UserService) revertOnCreateFailure(ctx context.Context, u *User) error {
     // todo: consider transaction
@@ -391,6 +441,20 @@ func (us *UserService) OrganizeUserEntity(ctx context.Context, u *User, withToke
         GetAuthService().FetchUserToken(ctx, u, true)
     }
     return nil
+}
+// on success it returns privileged user (Admin), otherwise returns `user-friendly` error
+// can be used directly as Response Message
+func (us *UserService) IsCallFromAdmin(ctx context.Context) (*User, error) {
+    // just for sure
+    admin, ok 	:= GetAuthService().GetLoggedUserPtr(ctx)
+    if !ok {
+        // somehow there's no logged user / error while trying to get from context or via token
+        return nil, ErrorFactory(ERR_CANT_FETCH_LOGGED_USER)
+    }
+    if !us.IsPrivileged(ctx, admin) {
+        return nil, ErrorFactory(ERR_OPERATION_NOT_PERMITTED)
+    }
+    return admin, nil
 }
 // checks if user has extra roles / privileges (admin/system)
 func (us *UserService) IsPrivileged(ctx context.Context, u *User) bool {
@@ -432,10 +496,12 @@ func (us *UserService) checkPrivileges(ctx context.Context, u *User, expected st
         }
         // for one of them (privileged user)
         if expected == USER_ROLE_PRIVILEGED {
-            return roleInfo.IsAdmin || roleInfo.IsSystem
+            // check against both (admin and system)
+            if roleInfo.IsAdmin || roleInfo.IsSystem {
+                return true
+            }
         }
     }
     return false
 }
 // endregion
-
