@@ -8,13 +8,16 @@ import (
 
 var HandlerRegistry = map[string]CustomHandler{
     // `almost`` friendly name  | unfriendly handler func ;)
+    // admin
+    "assignRole":               AssignRole,
+    "revokeRole":               RevokeRole,
+    "deleteUser":               DeleteUser,
+    "listUser":                 ListUsers,
     // users
     "login":                    Login,
     "logout":                   Logout,
     "register":                 RegisterUser,
-    "updateUser":               UpdateUser,
-    "deleteUser":               DeleteUser,
-    "listUser":                 ListUsers,
+    "updateUser":               UpdateUser, 
     // domain handlers
     // weather stations
     "findWeatherStation":       FindWeatherStation,
