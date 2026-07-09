@@ -74,7 +74,7 @@ func (us *UserService) Create(
     if nickname == "" {
         return &User{}, ErrorFactory(ERR_EMPTY_PARAM, "nickname")
     }
-    // todo: check email
+    // todo: check email (write: validateEmail)
     validatedEmail 	:= email
     // todo: check passphrace (is it ok with our policy?)
     validatedPhrase	:= passphrase
@@ -94,15 +94,15 @@ func (us *UserService) Create(
     // try create user
     err := us.Users.Save(ctx, &u)
     if err != nil {
-        // we don't need revert at this moment
-        return &User{}, ErrorFactory(ERR_ENTITY_SAVE, "User")
+        // move this error to validateEmail/Login method
+        return &User{}, ErrorFactory(ERR_LOGIN_ALREADY_IN_USE)
     }
     revert := false
     err     = us.AssignRoles(ctx, &u, []string{USER_ROLE_TRUSTED, USER_ROLE_COMMON})
     if err != nil {
         // we have to revet but...
         revert = true
-        // first... log reason of rever 
+        // first... log reason of revert 
         log.Println(err)
         log.Println(ErrorFactory(ERR_ASSIGN_ROLES, u.GetID()))
     }
@@ -400,8 +400,36 @@ func (us *UserService) FindRolesByAliases(ctx context.Context, aliases []string)
     }
     return roles, nil
 }
-
-// todo: roleExists
+// checks if user has specified (in args) roles
+func (us *UserService) HasRoles(ctx context.Context, u *User, roles []*Role) bool {
+    if u.Roles == nil {
+        if err := us.OrganizeUserEntity(ctx, u, false); err != nil {
+            // log this event (it shouldn't happen at all)
+            log.Printf("HasRole: Couldn't get result from `OrganizeUserEntity. Original error was: %s\n", err)
+            // silently return false in this case
+            return false
+        }
+    }
+    // iterate over passed roles    
+    for _, r := range roles {
+        hasRole := false 
+        // to check against user's roles
+        for _, uRole := range u.Roles {
+            if uRole.GetID() == r.GetID() && uRole.Name == r.Name {
+                // user has this role, go to next one
+                hasRole = true
+                break
+            }
+        }
+        // check
+        if !hasRole {
+            // missed role - we have to return false
+            return false
+        }
+    }
+    // user's set contains all roles from passed set so...
+    return true
+}
 // reverts "create user" action
 func (us *UserService) revertOnCreateFailure(ctx context.Context, u *User) error {
     // todo: consider transaction
