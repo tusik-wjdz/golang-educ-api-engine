@@ -70,6 +70,15 @@ func roleActionHelper(ctx context.Context, action string) (string, *User, error)
     if err != nil {
         return "", &User{}, err
     }
+    // check if user has this role
+    alreadyHasRole := us.HasRoles(ctx, u, roles)
+    // take the action depends on it
+    if action == ROLE_ACT_ASSIGN && alreadyHasRole {
+        return "", u, ErrorFactory(ERR_ROLE_ALREADY_ASSIGNED, roleAlias)
+    } else if action == ROLE_ACT_REVOKE && !alreadyHasRole {
+        return "", u, ErrorFactory(ERR_ROLE_REVOKE_NOT_ASSIGNED, roleAlias)
+    }
+    // but if everything is ok, we can set new role(s)
     if err := us.SetRoles(ctx, u, action, roles); err != nil {
         // log
         log.Println(err)
