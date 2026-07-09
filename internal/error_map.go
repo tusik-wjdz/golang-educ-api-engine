@@ -25,6 +25,8 @@ const (
     ERR_FETCH_ROLES uint16				= iota
     ERR_SETUP_ROLES_HANDLER_LVL uint16  = iota
     ERR_INV_ALIAS_FOR_ROLE uint16       = iota
+    ERR_ROLE_ALREADY_ASSIGNED uint16    = iota
+    ERR_ROLE_REVOKE_NOT_ASSIGNED uint16 = iota
     // request
     ERR_HIGHER_PRIVILEGES uint16		= iota
     ERR_ACCESS_DENIED_LOGIN_REQ uint16  = iota
@@ -33,11 +35,12 @@ const (
     ERR_NOT_LOGGED_IN uint16            = iota
     ERR_CANT_REMOVE_USER_TOKENS uint16  = iota  
     ERR_RESOURCE_NOT_FOUND uint16       = iota
-    // domain	
+    // misc. user	
     ERR_LOGIN_ERROR uint16				= iota
     ERR_INVALID_CREDS uint16			= iota
     ERR_ENTITY_NOT_FOUND uint16			= iota
     ERR_USER_NOT_FOUND uint16			= iota
+    ERR_LOGIN_ALREADY_IN_USE uint16     = iota
     ERR_GET_LIST uint16					= iota
     ERR_REVERT_AFTER_CREATE	uint16		= iota
 )
@@ -84,9 +87,13 @@ var mainErrorsDict = map[uint16][]string{
     ERR_REVOKE_ROLES:				{"Unable to revoke roles. User: [%s]", 				            "P009", "500"},
     ERR_REMOVE_ROLES:				{"Unable to remove roles related to user: [%s]", 	            "P010", "500"},
     ERR_INVALID_CREDS: 				{"Invalid login / password. Login failed", 			            "G202", "403"},
+    ERR_LOGIN_ALREADY_IN_USE:       {
+        "This email address / login is already in use. Please, choose another one.",                "G203", "400"},
     ERR_FETCH_ROLES:				{"Unable to fetch roles for: %s", 					            "G004", "500"},
     ERR_REFRESH_USER_ROLES:         {"Unable to refresh user's roles. Reason: %s\n",                "P006", "500"},
     ERR_SETUP_ROLES_HANDLER_LVL:    {"Failed to change roles on user ID: %d",                       "G005", "500"},
     ERR_INV_ALIAS_FOR_ROLE:         {"Invalid alias [%s] for role.",                                "G007", "400"},
+    ERR_ROLE_ALREADY_ASSIGNED:      {"This user already has this role (%s). Nothig to do.",         "G008", "400"},
+    ERR_ROLE_REVOKE_NOT_ASSIGNED:   {"Cannot revoke unassigned role (%s). Nothing to do.",          "G009", "400"},
     ERR_UNKNOWN: 					{"Unknown error occurred. Can't continue", 			            "G000", "500"},
 }
