@@ -112,7 +112,6 @@ func RunInTx(ctx context.Context, pool *pgxpool.Pool, fn func(ctx context.Contex
     // final commit
     return tx.Commit(ctx)
 }
-
 // try find ongoing transaction in context
 func tryGetTxFromContext(ctx context.Context) pgx.Tx {
     if tx, ok := ctx.Value(txKey{}).(pgx.Tx); ok {
@@ -120,7 +119,6 @@ func tryGetTxFromContext(ctx context.Context) pgx.Tx {
     }
     return nil
 }
-
 // run in TX (method)
 func (db *PsqlService[T, PT]) RunInTransaction(
     ctx context.Context,
@@ -145,8 +143,8 @@ func (db *PsqlService[T, PT]) RunInTransaction(
     return tx.Commit(ctx)
 }
 // endregion
-
 // todo: case sensitive / insensitive
+// todo: create syntax pre-check
 func (db *PsqlService[T, PT]) buildCriteria(
     c map[string]map[string]string,
 ) (string, []any, error) {
@@ -166,6 +164,7 @@ func (db *PsqlService[T, PT]) buildCriteria(
             }
         }
         for fieldWithCond, inputVal := range *sub {
+            // todo: case for *n < 1
             if *n > 1 {
                 if operator == "or" {
                     if stmt != "" {
@@ -224,7 +223,9 @@ func (db *PsqlService[T, PT]) buildCriteria(
             }
             for find, set := range cInfo {
                 if len(set) < 1 {
-                    // TODO: error
+                    return "", nil, fmt.Errorf(
+                        "Invalid syntax for whereIn/wherNotIn. At least one expression is required.",
+                    )
                 }
                 if n > 1 {
                     if strings.Contains(d, "or") {
@@ -331,7 +332,7 @@ func (db *PsqlService[T, PT]) DoFindByRawQuery(
     }	
     return results, nil
 }
-
+// method for batch insert in TX (with ongoing TX detection)
 func (db *PsqlService[T, PT]) DoBatchInsertTx(ctx context.Context, data []PT) ([]int, error) {
     // get transaction status
     tx 			:= tryGetTxFromContext(ctx)
@@ -389,7 +390,7 @@ func (db *PsqlService[T, PT]) DoBatchInsertTx(ctx context.Context, data []PT) ([
     }
     return ids, nil
 }
-
+// method for batch update in TX (with ongoing TX detection)
 func (db *PsqlService[T, PT]) DoBatchUpdateTx(ctx context.Context, data []PT) error {
     // get tx status
     tx 			:= tryGetTxFromContext(ctx)    
@@ -449,7 +450,7 @@ func (db *PsqlService[T, PT]) DoBatchUpdateTx(ctx context.Context, data []PT) er
     }
     return nil
 }
-
+// batch delete (also usable for single query without lost of performance)
 func (db *PsqlService[T, PT]) DoBatchDelete(
     ctx context.Context,
     data []PT,
@@ -494,7 +495,7 @@ func (db *PsqlService[T, PT]) DoBatchDelete(
     }
     return ra, nil
 }
-
+// delete inc. criteria created by builder in method above
 func (db *PsqlService[T, PT]) DoDeleteByCriteria(
     ctx context.Context,
     c map[string]map[string]string,
@@ -521,6 +522,7 @@ func (db *PsqlService[T, PT]) DoDeleteByCriteria(
 }
 
 // region handle_raw_queries
+// simple query, returns QueryResult DTO without fetching any data (e.g. SELECT, DELETE)
 func (db *PsqlService[T, PT]) DoExecRawQuery(
     ctx context.Context,
     q string,
@@ -541,7 +543,7 @@ func (db *PsqlService[T, PT]) DoExecRawQuery(
         RowsAffected:   ra,
     }
 }
-
+// simple query, returns QueryResult DTO (returs data as map or struct)
 func (db *PsqlService[T, PT]) DoRawQuery(
     ctx context.Context,
     q string,
@@ -573,7 +575,7 @@ func (db *PsqlService[T, PT]) DoRawQuery(
         // fill it with enity pointers (`generic` cast)
         for n, e := range res {
             results[n] = PT(e) // use pointer instead of copy of entity
-        }        
+        }
         return QueryResult[PT]{
             Ok:             true,
             AsStructPtr:    results,
@@ -597,6 +599,7 @@ func (db *PsqlService[T, PT]) DoRawQuery(
 // endregion
 
 // region funcs_exec_queries
+// simple query (result returns as struct defined by T)
 func DoRawQueryGetStruct[T any, PT interface {
     *T
     IEntity
@@ -627,7 +630,7 @@ func DoRawQueryGetStruct[T any, PT interface {
     }
     return results, nil    
 }
-
+// simple query (result returns as map[string]any w. type defined by PT)
 func DoRawQueryGetMap[PT IEntity](
     ctx context.Context,
     pool *pgxpool.Pool,
@@ -647,7 +650,7 @@ func DoRawQueryGetMap[PT IEntity](
     }
     return results, nil
 }
-
+// func for simple delete based on PT type, returns affected rows
 func DoBatchDelete[PT IEntity](
     ctx context.Context,
     pool *pgxpool.Pool,
@@ -694,7 +697,7 @@ func DoBatchDelete[PT IEntity](
     }
     return ra, nil
 }
-
+// simple query (based on type defined behind PT), returs affected rows
 func DoExecRawQuery[PT IEntity](
     ctx context.Context,
     pool *pgxpool.Pool,
@@ -708,6 +711,7 @@ func DoExecRawQuery[PT IEntity](
     }
     return ra, nil
 }
+// endregion
 
 // region helpers
 // helper for generating placeholders
